@@ -24,8 +24,9 @@ CREATE TABLE expenses (
 ```
 
 **Notes:**
-- Database: `monthly_bill` di `192.168.50.131:3306`
+- Database: `monthly_bill` (MySQL 8.0 container)
 - User: `copilot` | Pass: `copilot123`
+- Port: `3306` (mapped from container)
 - Table `reports` tidak digunakan (report generated on-the-fly)
 
 ### API Endpoints
@@ -401,6 +402,19 @@ func getExpenses(db *gorm.DB) gin.HandlerFunc {
 - Menggunakan SMTP untuk email delivery
 - Bulan otomatis sesuai bulan berjalan (current month)
 
+### Docker & Deployment
+- **Image size:** ~20MB (multi-stage build dengan Alpine)
+- **Container:** Runs as non-root, auto-restart on crash
+- **Database:** Persists in named volume (`mysql_data`)
+- **Health checks:** Built-in for both API & MySQL
+- **Production-ready:** HTTPS support, environment-based config
+
+### Deployment Options
+1. **Local Docker:** `docker-compose up -d` (current setup)
+2. **Remote Server:** Copy to 192.168.50.131 and run `docker-compose up -d`
+3. **Kubernetes:** Create deployment + service manifests
+4. **Cloud:** Deploy to AWS ECS, GCP Cloud Run, etc
+
 ### Future Enhancements
 1. **Authentication** - JWT/Bearer token
 2. **Multi-user** - Role-based access (admin, viewer)
@@ -408,44 +422,81 @@ func getExpenses(db *gorm.DB) gin.HandlerFunc {
 4. **Budget tracking** - Set limits per category
 5. **Export formats** - PDF, Excel, JSON
 6. **Notifications** - Alert when expense added/report sent
+7. **API Rate Limiting** - Prevent abuse
+8. **Caching** - Redis for performance
 
 ---
 
 ## Configuration
 
-### SMTP Setup (.env atau config file)
+### Environment Variables (.env)
 ```
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your-email@gmail.com
-SMTP_PASS=your-app-password
-
-EMAIL_FROM=waonex86@gmail.com
-EMAIL_RECIPIENTS=nurdahliana86@gmail.com,waonex86@gmail.com
-
-DB_HOST=192.168.50.131
+# Database Configuration (Docker)
+DB_HOST=mysql
 DB_PORT=3306
 DB_NAME=monthly_bill
 DB_USER=copilot
 DB_PASS=copilot123
+
+# SMTP Configuration
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=waonex86@gmail.com
+SMTP_PASS=rycs xeoy laly wenh
+
+# Email Configuration
+EMAIL_FROM=waonex86@gmail.com
+EMAIL_RECIPIENTS=nurdahliana86@gmail.com,waonex86@gmail.com
+
+# Server Configuration
+SERVER_PORT=8080
+SERVER_ENV=production
 ```
 
 **Notes:**
+- `DB_HOST=mysql` untuk container networking (docker-compose)
+- Untuk local testing: `DB_HOST=localhost` atau `127.0.0.1`
 - Untuk Gmail: gunakan [App Password](https://support.google.com/accounts/answer/185833)
-- Sesuaikan SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS dengan provider email yang digunakan
+- `.env` file sudah ada dengan konfigurasi yang sesuai
 
 ---
 
 ## Setup Instructions
 
-### Backend
+### Backend (Docker)
+
+**Prerequisites:**
+- Docker & Docker Compose installed
+- Port 8080 & 3306 available
+
+**Quick Start:**
 ```bash
-go get github.com/gin-gonic/gin
-go get gorm.io/gorm
-go get gorm.io/driver/mysql
-go get github.com/joho/godotenv
-go run main.go
-# Server runs on :8080
+# 1. Start containers (MySQL + API)
+docker-compose up -d
+
+# 2. Check status
+docker-compose ps
+
+# 3. View logs
+docker-compose logs -f monthly-journal-api
+
+# 4. Test health
+curl http://localhost:8080/health
+
+# 5. Stop containers
+docker-compose down
+```
+
+**Development (without Docker):**
+```bash
+# 1. Install dependencies
+go mod download
+
+# 2. Make sure MySQL is running locally (port 3306)
+# 3. Update DB_HOST in .env to localhost
+
+# 4. Run server
+go run cmd/server/main.go
 ```
 
 ### Android
@@ -460,7 +511,14 @@ npm start
 
 ## Testing
 
-### Catat Belanja
+**Prerequisites:** `docker-compose up -d` harus running
+
+### Health Check
+```bash
+curl http://localhost:8080/health
+```
+
+### Catat Belanja (POST)
 ```bash
 curl -X POST http://localhost:8080/api/expenses \
   -H "Content-Type: application/json" \
@@ -471,12 +529,21 @@ curl -X POST http://localhost:8080/api/expenses \
   }'
 ```
 
-### Ambil Report
+### Ambil Expenses (GET)
 ```bash
+# All expenses current month
+curl http://localhost:8080/api/expenses
+
+# Expenses for specific month
 curl http://localhost:8080/api/expenses?month=2026-06
 ```
 
-### Kirim Report
+### Hapus Expense (DELETE)
+```bash
+curl -X DELETE http://localhost:8080/api/expenses/1
+```
+
+### Kirim Report (POST)
 ```bash
 curl -X POST http://localhost:8080/api/reports/send \
   -H "Content-Type: application/json" \
@@ -485,6 +552,91 @@ curl -X POST http://localhost:8080/api/reports/send \
   }'
 ```
 Report akan generate untuk bulan berjalan dan dikirim ke recipients yang sudah configured di .env
+
+### Database Access (MySQL)
+```bash
+# Connect ke database container
+mysql -h 127.0.0.1 -u copilot -p copilot123 monthly_bill
+
+# Or using docker exec
+docker exec -it monthly-journal-mysql mysql -u copilot -p copilot123 monthly_bill
+```
+
+---
+
+## Docker Architecture
+
+### Services
+```
+┌─────────────────────────────────────────┐
+│       Docker Compose Network            │
+│  (monthly-journal-net)                  │
+│                                         │
+│  ┌──────────────────────────────────┐  │
+│  │  monthly-journal-api (Go)        │  │
+│  │  - Port: 8080                    │  │
+│  │  - Health: /health               │  │
+│  │  - Status: Restarts auto         │  │
+│  └──────────────────────────────────┘  │
+│               ↓                         │
+│  ┌──────────────────────────────────┐  │
+│  │  monthly-journal-mysql (MySQL)   │  │
+│  │  - Port: 3306                    │  │
+│  │  - Database: monthly_bill        │  │
+│  │  - Volume: mysql_data            │  │
+│  │  - Status: Healthy check active  │  │
+│  └──────────────────────────────────┘  │
+└─────────────────────────────────────────┘
+```
+
+### Volumes
+- `mysql_data` - Persistent MySQL data storage (docker-compose managed)
+
+### Health Checks
+- **API:** HTTP GET `/health` (30s interval)
+- **MySQL:** TCP ping (10s interval)
+
+---
+
+## Troubleshooting
+
+### Container tidak start
+```bash
+# Check logs
+docker-compose logs monthly-journal-api
+
+# Restart
+docker-compose restart monthly-journal-api
+```
+
+### Database connection refused
+```bash
+# Check MySQL container
+docker-compose ps
+
+# Check MySQL logs
+docker-compose logs monthly-journal-mysql
+
+# Verify port 3306 not used
+lsof -i :3306
+```
+
+### Port already in use
+```bash
+# Find process using port 8080
+lsof -i :8080
+
+# Stop it or change docker-compose port mapping
+```
+
+### Reset everything
+```bash
+# Stop and remove containers + volumes
+docker-compose down -v
+
+# Rebuild and restart
+docker-compose up -d
+```
 
 ---
 

@@ -6,7 +6,6 @@
 *.md
 *.out
 monthly-journal
-go.sum
 .claude
 .vscode
 .idea

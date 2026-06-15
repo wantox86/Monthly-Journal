@@ -13,7 +13,6 @@ monthly-journal
 
 # Go build cache
 .cache/
-go.sum
 
 # IDE
 .vscode/
