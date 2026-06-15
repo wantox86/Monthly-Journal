@@ -1,0 +1,15 @@
+.git
+.github
+.gitignore
+.env
+.DS_Store
+*.md
+*.out
+monthly-journal
+go.sum
+.claude
+.vscode
+.idea
+*.swp
+*.swo
+*~

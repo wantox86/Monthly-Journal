@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  monthly-journal-api:
+    build: .
+    container_name: monthly-journal-api
+    ports:
+      - "8080:8080"
+    environment:
+      # Database
+      DB_HOST: 192.168.50.131
+      DB_PORT: 3306
+      DB_NAME: monthly_bill
+      DB_USER: copilot
+      DB_PASS: copilot123
+
+      # SMTP
+      SMTP_HOST: smtp.gmail.com
+      SMTP_PORT: 587
+      SMTP_USER: waonex86@gmail.com
+      SMTP_PASS: rycs xeoy laly wenh
+
+      # Email
+      EMAIL_FROM: waonex86@gmail.com
+      EMAIL_RECIPIENTS: nurdahliana86@gmail.com,waonex86@gmail.com
+
+      # Server
+      SERVER_PORT: 8080
+      SERVER_ENV: production
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+    networks:
+      - monthly-journal-net
+
+    depends_on:
+      - check-db
+
+  check-db:
+    image: alpine:latest
+    command: sh -c 'echo "Note: Database must be running on 192.168.50.131:3306"'
+    networks:
+      - monthly-journal-net
+
+networks:
+  monthly-journal-net:
+    driver: bridge

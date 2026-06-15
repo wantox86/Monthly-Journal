@@ -85,9 +85,41 @@ SERVER_PORT=8080
 SERVER_ENV=development
 ```
 
+## Docker Deployment
+
+Aplikasi sudah **Docker Ready** dengan multi-stage build (~15-20MB image size).
+
+### Quick Deploy
+
+```bash
+# Local
+docker build -t monthly-journal:latest .
+docker-compose up -d
+
+# Or single container
+docker run -d -p 8080:8080 --env-file .env monthly-journal:latest
+```
+
+### Deploy ke 192.168.50.131
+
+```bash
+# Option 1: Copy & build di server
+scp -r . user@192.168.50.131:/home/user/monthly-journal/
+ssh user@192.168.50.131
+cd /home/user/monthly-journal
+docker-compose up -d
+
+# Option 2: Push image ke registry
+docker tag monthly-journal:latest 192.168.50.131:5000/monthly-journal:latest
+docker push 192.168.50.131:5000/monthly-journal:latest
+```
+
+Lihat [DOCKER.md](DOCKER.md) untuk deployment details.
+
 ## Documentation Files
 
 - **[SPRINTS.md](SPRINTS.md)** - 5 sprint breakdown dengan checklist
 - **[PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)** - Directory structure & code templates
+- **[DOCKER.md](DOCKER.md)** - Docker setup & deployment guide
 - **[claude.md](claude.md)** - Project specifications
 - **[.env.example](.env.example)** - Environment variables template
